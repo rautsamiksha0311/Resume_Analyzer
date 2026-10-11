@@ -1,0 +1,268 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Resume Analyzer</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            background: #f1f5f9;
+            color: #1e293b;
+            margin: 0;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 750px;
+            margin: auto;
+            background: white;
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 8px 30px #00000010;
+        }
+        h1 {
+            text-align: center;
+            color: #2563eb;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #64748b;
+            margin-bottom: 30px;
+        }
+        label {
+            display: block;
+            font-weight: bold;
+            margin: 20px 0 8px;
+        }
+        input[type="file"], textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font: inherit;
+        }
+        textarea {
+            min-height: 150px;
+            resize: vertical;
+        }
+        button {
+            width: 100%;
+            padding: 14px;
+            margin-top: 22px;
+            border: none;
+            border-radius: 8px;
+            background: #2563eb;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #1d4ed8;
+        }
+        button:disabled {
+            background: #94a3b8;
+            cursor: wait;
+        }
+        #downloadButton {
+            background: #059669;
+        }
+        #downloadButton:hover {
+            background: #047857;
+        }
+        #status {
+            margin-top: 20px;
+            color: #475569;
+        }
+        #status h2, #status h3 {
+            text-align: center;
+        }
+        #status h2 {
+            margin-top: 30px;
+        }
+        #status li {
+            margin: 8px 0;
+            overflow-wrap: anywhere;
+        }
+        .score {
+            text-align: center;
+            color: #2563eb;
+        }
+        .note {
+            font-size: 13px;
+            color: #64748b;
+            margin-top: 18px;
+            text-align: center;
+        }
+        [hidden] {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AI Resume Analyzer</h1>
+        <p class="subtitle">Compare your resume with a job description.</p>
+
+        <form id="resumeForm">
+            <label for="resume">Upload your resume (PDF)</label>
+            <input type="file" id="resume" name="resume"
+                   accept=".pdf,application/pdf" required>
+
+            <label for="job_description">Job description</label>
+            <textarea id="job_description" name="job_description"
+                      placeholder="Paste the job description here..."
+                      required></textarea>
+
+            <button type="submit" id="analyzeButton">Analyze Resume</button>
+        </form>
+
+        <div id="status" aria-live="polite">
+            Your analysis results will appear here.
+        </div>
+
+        <button type="button" id="downloadButton" hidden>
+            Download Analysis Report
+        </button>
+
+        <p class="note">Upload a text-based PDF for best results.</p>
+    </div>
+
+<script>
+const form = document.getElementById("resumeForm");
+const statusMessage = document.getElementById("status");
+const analyzeButton = document.getElementById("analyzeButton");
+const downloadButton = document.getElementById("downloadButton");
+
+let latestReport = null;
+
+downloadButton.addEventListener("click", function() {
+    if (!latestReport) return;
+
+    const blob = new Blob([latestReport], {
+        type: "text/plain;charset=utf-8"
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = "resume_analysis_report.txt";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    setTimeout(function() {
+        URL.revokeObjectURL(url);
+    }, 1000);
+});
+
+form.addEventListener("submit", async function(event) {
+    event.preventDefault();
+
+    const resume = document.getElementById("resume").files[0];
+    const jobDescription = document.getElementById("job_description").value.trim();
+
+    if (!resume || !resume.name.toLowerCase().endsWith(".pdf")) {
+        statusMessage.textContent = "Please select a PDF resume.";
+        return;
+    }
+
+    if (!jobDescription) {
+        statusMessage.textContent = "Please enter a job description.";
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("resume", resume);
+    formData.append("job_description", jobDescription);
+
+    statusMessage.textContent = "Analyzing your resume...";
+    downloadButton.hidden = true;
+    latestReport = null;
+    analyzeButton.disabled = true;
+
+    try {
+        const response = await fetch("/analyze", {
+            method: "POST",
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.detail || "Analysis failed.");
+        }
+
+        statusMessage.replaceChildren();
+
+        const heading = document.createElement("h2");
+        heading.textContent = "Analysis Results";
+        statusMessage.appendChild(heading);
+
+        const score = document.createElement("h3");
+        score.className = "score";
+        score.textContent = "Match Score: " + data.match_score + "%";
+        statusMessage.appendChild(score);
+
+        const sections = [
+            ["Resume Skills", data.resume_skills],
+            ["Matched Skills", data.matched_skills],
+            ["Missing Skills", data.missing_skills]
+        ];
+
+        sections.forEach(function(section) {
+            const title = document.createElement("h3");
+            title.textContent = section[0];
+            statusMessage.appendChild(title);
+
+            const list = document.createElement("ul");
+            const skills = section[1] || [];
+
+            if (skills.length === 0) {
+                const item = document.createElement("li");
+                item.textContent = "None detected";
+                list.appendChild(item);
+            } else {
+                skills.forEach(function(skill) {
+                    const item = document.createElement("li");
+                    item.textContent = skill;
+                    list.appendChild(item);
+                });
+            }
+
+            statusMessage.appendChild(list);
+        });
+
+        latestReport = [
+            "AI RESUME ANALYSIS REPORT",
+            "=========================",
+            "",
+            "Resume: " + resume.name,
+            "Match Score: " + data.match_score + "%",
+            "",
+            "RESUME SKILLS",
+            ...(data.resume_skills.length ? data.resume_skills : ["None detected"]),
+            "",
+            "MATCHED SKILLS",
+            ...(data.matched_skills.length ? data.matched_skills : ["None detected"]),
+            "",
+            "MISSING SKILLS",
+            ...(data.missing_skills.length ? data.missing_skills : ["None detected"])
+        ].join("\n");
+
+        downloadButton.hidden = false;
+
+    } catch (error) {
+        statusMessage.textContent = "Error: " + error.message;
+    } finally {
+        analyzeButton.disabled = false;
+    }
+});
+</script>
+</body>
+</html>
