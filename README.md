@@ -99,4 +99,4 @@ This project is available for educational and portfolio purposes.
 
 ## 📞 Contact
 
-For questions or suggestions, reach out at **rautsamiksha0811@gmail.com** or visit my [GitHub Profile](https://github.com/rautsamiksha0311).
+For questions or suggestions, reach out at **rautsamiksha0811@gmail.com**
